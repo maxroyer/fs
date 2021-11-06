@@ -1,15 +1,17 @@
-use std::net::{TcpListener, TcpStream};
-use std::io::{IoSlice, IoSliceMut, prelude::*};
-use std::fs::{File};
-use std::os::unix::prelude::FileExt;
+use std::net::{TcpListener, IpAddr, SocketAddrV4};
 use std::process;
+use local_ip_address::local_ip;
+use fs::{send_file, handle_client};
+
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+    let _program = args[0].clone();
+
     let config = Config::new(args);
     
     if config.server_mode {
-        let listener = match TcpListener::bind("192.168.1.146:3333") {
+        let listener = match TcpListener::bind(&config.ip) {
             Ok(listener) => listener,
             Err(e) => {
                 eprintln!("Error creating server: {}", e);
@@ -31,14 +33,15 @@ fn main() -> std::io::Result<()> {
     
         Ok(())
     } else {
-        send_file(&config.send_path)
+        send_file(&config.ip, &config.send_path)
     }
 }
 
 struct Config {
     pub server_mode: bool,
     _rec_dir: String,
-    send_path: String
+    pub send_path: String,
+    pub ip: SocketAddrV4
 }
 
 impl Config {
@@ -53,23 +56,52 @@ impl Config {
 
         match command.as_str() {
             "send" => {
-                let file = match args.get(2) {
-                    Some(file) => file,
+                let ip = match args.get(2) {
+                    Some(ip) => ip,
                     None => {
                         eprintln!("Error: no file provided. Use fs send [ADDRESS] (FILEPATH)");
+                        process::exit(1)
+                    }
+                };
+                let ip: SocketAddrV4 = match ip.parse() {
+                    Ok(ip) => ip,
+                    Err(_) => {
+                        eprintln!("Error: ip address not recognized");
+                        process::exit(1)
+                    }
+                };
+                let file = match args.get(3) {
+                    Some(file) => file,
+                    None => {
+                        eprintln!("Error: no ip provided. Use fs send [ADDRESS] (FILEPATH)");
                         process::exit(1)
                     }
                 };
                 Config {
                     server_mode: false,
                     _rec_dir: String::from("/rec"),
-                    send_path: file.clone()}
+                    send_path: file.clone(),
+                    ip: ip
+                }
             },
             "rec" => {
+                let ip = match local_ip() {
+                    Ok(IpAddr::V4(ip)) => ip,
+                    Ok(IpAddr::V6(_)) => {
+                        eprintln!("Could not get local ip");
+                        process::exit(1)
+                    },
+                    Err(_) => {
+                        eprintln!("Could not get local ip");
+                        process::exit(1)
+                    }
+                };
+                let socket: SocketAddrV4 = format!("{}:3333", &ip.to_string()).parse().unwrap();
                 Config {
                     server_mode: true,
                     _rec_dir: String::from("/rec"),
-                    send_path: String::new()
+                    send_path: String::new(),
+                    ip: socket
                 }
             }
             _ => {
@@ -81,102 +113,5 @@ impl Config {
     }
 }
 
-fn path_to_name(path: &String) -> String {
-    let loc =  match path.rfind('/') {
-        Some(loc) => loc,
-        None => return path.clone()
-    };
-    path[loc+1..].to_string()
-}
 
-fn send_file(path: &String) -> std::io::Result<()> {
-    let filename = path_to_name(&path);
-    let file = File::open(path)?;
-    let file_metadata = file.metadata()?;
 
-    //  Create byte slices holding the filename, name length, and content length
-    let filename_data = filename.as_bytes();
-    let filename_len_data = filename_data.len().to_be_bytes();
-    let file_len_data = file_metadata.len().to_be_bytes();
- 
-    //  Create IoSlices
-    let filename_len_slice = IoSlice::new(&filename_len_data);
-    let file_len_slice = IoSlice::new(&file_len_data);
-    let filename_slice = IoSlice::new(&filename_data);
-    
-    //  Change address back to 0.0.0.0 when you can't figure out why localhost won't work
-    let mut stream = match TcpStream::connect("192.168.1.146:3333") {
-        Ok(stream) => stream,
-        Err(e) => panic!("Error creating stream: {}", e)
-    };
-
-    stream.set_nodelay(true)?;
-    stream.write_vectored(&[filename_len_slice, file_len_slice, filename_slice])?;
-
-    //  Send data in 4kB buffers
-
-    let sections_needed = (file_metadata.len() as f64 / 4000.0).ceil();
-    let sections_needed = sections_needed as u64;
-    for i in 0..sections_needed {
-        let mut buffer = vec!(0 as u8; 4000);
-        let bytes_read = file.read_at(&mut buffer, i * 4000)?;
-
-        stream.write(&buffer[0..bytes_read])?;
-    }
-
-    Ok(())
-}
-
-fn handle_client (mut stream: TcpStream) {
-    let mut filename_len_data = [0 as u8; 8];
-    let mut file_len_data = [0 as u8; 8];
-
-    let filename_len_buf = IoSliceMut::new(&mut filename_len_data);
-    let file_len_buf = IoSliceMut::new(&mut file_len_data);
-
-    match stream.read_vectored(&mut [filename_len_buf, file_len_buf]) {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("Error reading stream: {}", e);
-            process::exit(1)
-        }
-    }
-    let filename_len = u64::from_be_bytes(filename_len_data);
-    let content_len = u64::from_be_bytes(file_len_data);
-
-    let mut filename_data = vec!(0 as u8; filename_len.try_into().unwrap());
-    
-    match stream.read(&mut filename_data) {
-        Ok(_) => (),
-        Err(e) => {
-            eprintln!("Error reading stream: {}", e);
-            process::exit(1)
-        }
-    }
-
-    let filename = std::str::from_utf8_mut(&mut filename_data).unwrap();
-    println!("\tDownloading: {}\n\tSize: {} bytes", filename, content_len);
-
-    let sections_needed = (content_len as f64 / 4000.0).ceil();
-    let sections_needed = sections_needed as u64;
-
-    let filepath = format!("rec/{}", &filename);
-
-    let file = match File::create(&filepath) {
-        Ok(file) => file,
-        Err(e) => {
-            eprintln!("Error creating file {}: {}", filename, e);
-            process::exit(1)
-        }
-    };
-    let mut total_written = 0;
-    for i in 0..sections_needed {
-        let mut buffer = vec!(0 as u8; 4000);
-        let buf_size = stream.peek(&mut buffer).unwrap();
-    
-        stream.read(&mut buffer[0..buf_size]).unwrap();
-        let bytes_written = file.write_at(&buffer[0..buf_size], i * 4000 ).unwrap();
-        total_written += bytes_written;
-    }
-    println!("{} / {} bytes written", total_written, content_len)
-}
