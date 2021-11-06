@@ -12,7 +12,10 @@ fn main() -> std::io::Result<()> {
     
     if config.server_mode {
         let listener = match TcpListener::bind(&config.ip) {
-            Ok(listener) => listener,
+            Ok(listener) => {
+                println!("Server listening on {}", &config.ip);
+                listener
+            },
             Err(e) => {
                 eprintln!("Error creating server: {}", e);
                 process::exit(1)
