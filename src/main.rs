@@ -5,9 +5,11 @@ use std::os::unix::prelude::FileExt;
 use std::process;
 
 fn main() -> std::io::Result<()> {
-    let server_mode = true;
-    if server_mode {
-        let listener = match TcpListener::bind("0.0.0.0:3333") {
+    let args: Vec<String> = std::env::args().collect();
+    let config = Config::new(args);
+    
+    if config.server_mode {
+        let listener = match TcpListener::bind("192.168.1.146:3333") {
             Ok(listener) => listener,
             Err(e) => {
                 eprintln!("Error creating server: {}", e);
@@ -29,14 +31,67 @@ fn main() -> std::io::Result<()> {
     
         Ok(())
     } else {
-        send_file()
+        send_file(&config.send_path)
     }
 }
 
-fn send_file() -> std::io::Result<()> {
-    let filename = "photo.jpg";
-    let filepath = format!("send/{}", filename);
-    let file = File::open(filepath)?;
+struct Config {
+    pub server_mode: bool,
+    _rec_dir: String,
+    send_path: String
+}
+
+impl Config {
+    fn new(args: Vec<String>) -> Config {
+        let command = match args.get(1) {
+            Some(arg) => arg.clone(), 
+            None => {
+                eprintln!("Error: no command specified. Use fs send [ADDRESS] (FILEPATH) or fs rec");
+                process::exit(1);
+            }
+        };
+
+        match command.as_str() {
+            "send" => {
+                let file = match args.get(2) {
+                    Some(file) => file,
+                    None => {
+                        eprintln!("Error: no file provided. Use fs send [ADDRESS] (FILEPATH)");
+                        process::exit(1)
+                    }
+                };
+                Config {
+                    server_mode: false,
+                    _rec_dir: String::from("/rec"),
+                    send_path: file.clone()}
+            },
+            "rec" => {
+                Config {
+                    server_mode: true,
+                    _rec_dir: String::from("/rec"),
+                    send_path: String::new()
+                }
+            }
+            _ => {
+                eprintln!("Error: unrecognized command. Use fs send [ADDRESS] (FILEPATH) or fs rec");
+                process::exit(1);
+            }
+
+        }
+    }
+}
+
+fn path_to_name(path: &String) -> String {
+    let loc =  match path.rfind('/') {
+        Some(loc) => loc,
+        None => return path.clone()
+    };
+    path[loc+1..].to_string()
+}
+
+fn send_file(path: &String) -> std::io::Result<()> {
+    let filename = path_to_name(&path);
+    let file = File::open(path)?;
     let file_metadata = file.metadata()?;
 
     //  Create byte slices holding the filename, name length, and content length
@@ -50,7 +105,7 @@ fn send_file() -> std::io::Result<()> {
     let filename_slice = IoSlice::new(&filename_data);
     
     //  Change address back to 0.0.0.0 when you can't figure out why localhost won't work
-    let mut stream = match TcpStream::connect("0.0.0.0:3333") {
+    let mut stream = match TcpStream::connect("192.168.1.146:3333") {
         Ok(stream) => stream,
         Err(e) => panic!("Error creating stream: {}", e)
     };
