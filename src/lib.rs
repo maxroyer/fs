@@ -6,7 +6,8 @@ use std::process;
 
 
 pub fn send_file(ip: &SocketAddrV4, path: &String) -> std::io::Result<()> {
-    let filename = path_to_name(&path);
+    let fullpath = format!("{}/{}", std::env::current_dir().unwrap().display(), &path);
+    let filename = path_to_name(&fullpath);
     let file = File::open(path)?;
     let file_metadata = file.metadata()?;
 
@@ -39,6 +40,7 @@ pub fn send_file(ip: &SocketAddrV4, path: &String) -> std::io::Result<()> {
 
         stream.write(&buffer[0..bytes_read])?;
     }
+    println!("{} sent successfully", filename);
 
     Ok(())
 }
@@ -75,13 +77,11 @@ pub fn handle_client (mut stream: TcpStream) {
 
     let sections_needed = (content_len as f64 / 4000.0).ceil();
     let sections_needed = sections_needed as u64;
-
-    let filepath = format!("rec/{}", &filename);
-
-    let file = match File::create(&filepath) {
+    let fullpath = format!("{}/{}", std::env::current_dir().unwrap().display(), &filename);
+    let file = match File::create(&fullpath) {
         Ok(file) => file,
         Err(e) => {
-            eprintln!("Error creating file {}: {}", filename, e);
+            eprintln!("Error creating file {}: {}", fullpath, e);
             process::exit(1)
         }
     };
@@ -94,7 +94,7 @@ pub fn handle_client (mut stream: TcpStream) {
         let bytes_written = file.write_at(&buffer[0..buf_size], i * 4000 ).unwrap();
         total_written += bytes_written;
     }
-    println!("{} / {} bytes written", total_written, content_len)
+    println!("{} / {} bytes written to {}", total_written, content_len, fullpath)
 }
 
 fn path_to_name(path: &String) -> String {
