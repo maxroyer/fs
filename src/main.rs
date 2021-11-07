@@ -3,6 +3,9 @@ use std::process;
 use local_ip_address::local_ip;
 use fs::{send_file, handle_client};
 
+const PROGRAM_DESC: &str = "fs v0.0.1\nfs can be used to send and recieve files on a local network.\n
+Usage:\nfs send [ADDRESS] (FILEPATH)\tsend a file to the specified server
+fs rec\t\t\t\tstart listening for files";
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -106,7 +109,11 @@ impl Config {
                     send_path: String::new(),
                     ip: socket
                 }
-            }
+            },
+            "--help" => {
+                println!("{}", PROGRAM_DESC);
+                process::exit(1)
+            },
             _ => {
                 eprintln!("Error: unrecognized command. Use fs send [ADDRESS] (FILEPATH) or fs rec");
                 process::exit(1);
