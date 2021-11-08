@@ -1,6 +1,5 @@
 # fs
 fs is a simple program for sharing files between devices on a local network.
-Usage:
 To start a server listening for files on the local network:
 
 	fs rec
