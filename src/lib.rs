@@ -29,7 +29,13 @@ pub fn send_file(ip: &SocketAddrV4, path: &String) -> std::io::Result<()> {
     };
 
     stream.set_nodelay(true)?;
-    stream.write_vectored(&[filename_len_slice, file_len_slice, filename_slice])?;
+    match stream.write_vectored(&[filename_len_slice, file_len_slice, filename_slice]) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error sending metadata: {}", e);
+            process::exit(1)
+        }
+    };
 
     //  Send data in 4kB buffers
 
