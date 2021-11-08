@@ -1,6 +1,6 @@
 use std::net::{TcpStream, SocketAddrV4};
-use std::io::{IoSlice, IoSliceMut, prelude::*};
-use std::fs::{File};
+use std::io::{prelude::*, IoSlice};
+use std::fs::File;
 use std::os::unix::prelude::FileExt;
 use std::process;
 
@@ -45,13 +45,14 @@ pub fn send_file(ip: &SocketAddrV4, path: &String) -> std::io::Result<()> {
     Ok(())
 }
 
-pub fn handle_client (mut stream: TcpStream) {
+pub fn handle_client (mut stream: TcpStream, path: &String) {
     let mut filename_len_data = [0 as u8; 8];
     let mut file_len_data = [0 as u8; 8];
 
-    let filename_len_buf = IoSliceMut::new(&mut filename_len_data);
-    let file_len_buf = IoSliceMut::new(&mut file_len_data);
+    //let filename_len_buf = IoSliceMut::new(&mut filename_len_data);
+    //let file_len_buf = IoSliceMut::new(&mut file_len_data);
 
+    /*
     match stream.read_vectored(&mut [filename_len_buf, file_len_buf]) {
         Ok(_) => (),
         Err(e) => {
@@ -59,6 +60,25 @@ pub fn handle_client (mut stream: TcpStream) {
             process::exit(1)
         }
     }
+    */
+    match stream.read(&mut filename_len_data) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error reading stream (filename length): {}", e);
+            process::exit(1)
+        }
+    };
+    std::thread::sleep(std::time::Duration::from_millis(15));
+    match stream.read(&mut file_len_data) {
+        Ok(_) => (),
+        Err(e) => {
+            eprintln!("Error reading stream (file length): {}", e);
+            process::exit(1)
+        }
+    };
+    std::thread::sleep(std::time::Duration::from_millis(15));
+
+
     let filename_len = u64::from_be_bytes(filename_len_data);
     let content_len = u64::from_be_bytes(file_len_data);
 
@@ -77,7 +97,7 @@ pub fn handle_client (mut stream: TcpStream) {
 
     let sections_needed = (content_len as f64 / 4000.0).ceil();
     let sections_needed = sections_needed as u64;
-    let fullpath = format!("{}/{}", std::env::current_dir().unwrap().display(), &filename);
+    let fullpath = format!("{}{}", &path, &filename);
     let file = match File::create(&fullpath) {
         Ok(file) => file,
         Err(e) => {

@@ -5,7 +5,8 @@ use fs::{send_file, handle_client};
 
 const PROGRAM_DESC: &str = "fs v0.0.1\nfs can be used to send and recieve files on a local network.\n
 Usage:\nfs send [ADDRESS] (FILEPATH)\tsend a file to the specified server
-fs rec\t\t\t\tstart listening for files";
+fs rec\t\t\t\tstart listening for files
+fs rec -o PATH/TO/DIR\t\toptionally specify a directory";
 
 fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
@@ -28,7 +29,7 @@ fn main() -> std::io::Result<()> {
         match listener.accept() {
             Ok((stream, addr)) => {
                 println!("Connected to: {:?}", addr);
-                handle_client(stream);
+                handle_client(stream, &config.rec_dir);
                 drop(listener)
             },
             Err(e) => {
@@ -45,7 +46,7 @@ fn main() -> std::io::Result<()> {
 
 struct Config {
     pub server_mode: bool,
-    _rec_dir: String,
+    pub rec_dir: String,
     pub send_path: String,
     pub ip: SocketAddrV4
 }
@@ -85,9 +86,9 @@ impl Config {
                 };
                 Config {
                     server_mode: false,
-                    _rec_dir: String::from("/rec"),
+                    rec_dir: String::from("/rec"),
                     send_path: file.clone(),
-                    ip: ip
+                    ip
                 }
             },
             "rec" => {
@@ -102,10 +103,22 @@ impl Config {
                         process::exit(1)
                     }
                 };
+                let mut rec_dir = String::new();
+                if args.get(2) == Some(&String::from("-o")) {
+                    rec_dir = match args.get(3) {
+                        Some(dir) => String::from(format!("{}/{}", std::env::current_dir().unwrap().display(), dir)),
+                        None => {
+                            eprintln!("Error, no output directory provided. Use fs rec -o PATH/TO/DIR");
+                            process::exit(1)
+                        }
+                    }; 
+                } else {
+                    rec_dir = String::from(std::env::current_dir().unwrap().display().to_string());
+                }
                 let socket: SocketAddrV4 = format!("{}:3333", &ip.to_string()).parse().unwrap();
                 Config {
                     server_mode: true,
-                    _rec_dir: String::from("/rec"),
+                    rec_dir, 
                     send_path: String::new(),
                     ip: socket
                 }
