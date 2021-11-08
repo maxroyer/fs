@@ -103,7 +103,7 @@ impl Config {
                         process::exit(1)
                     }
                 };
-                let mut rec_dir = String::new();
+                let mut rec_dir = String::from(std::env::current_dir().unwrap().display().to_string());
                 if args.get(2) == Some(&String::from("-o")) {
                     rec_dir = match args.get(3) {
                         Some(dir) => String::from(format!("{}/{}", std::env::current_dir().unwrap().display(), dir)),
@@ -112,8 +112,6 @@ impl Config {
                             process::exit(1)
                         }
                     }; 
-                } else {
-                    rec_dir = String::from(std::env::current_dir().unwrap().display().to_string());
                 }
                 let socket: SocketAddrV4 = format!("{}:3333", &ip.to_string()).parse().unwrap();
                 Config {
