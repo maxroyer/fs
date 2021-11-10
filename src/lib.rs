@@ -1,7 +1,7 @@
 use std::net::{TcpStream, SocketAddrV4};
 use std::io::{prelude::*, IoSlice};
 use std::fs::File;
-use std::os::unix::prelude::FileExt;
+//use std::os::unix::prelude::FileExt;
 use std::process;
 use std::time::Instant;
 
@@ -9,7 +9,7 @@ use std::time::Instant;
 pub fn send_file(ip: &SocketAddrV4, path: &String) -> std::io::Result<()> {
     let fullpath = format!("{}/{}", std::env::current_dir().unwrap().display(), &path);
     let filename = path_to_name(&fullpath);
-    let file = File::open(path)?;
+    let mut file = File::open(path)?;
     let file_metadata = file.metadata()?;
 
     //  Create byte slices holding the filename, name length, and content length
@@ -41,9 +41,9 @@ pub fn send_file(ip: &SocketAddrV4, path: &String) -> std::io::Result<()> {
 
     let sections_needed = (file_metadata.len() as f64 / 4000.0).ceil();
     let sections_needed = sections_needed as u64;
-    for i in 0..sections_needed {
+    for _i in 0..sections_needed {
         let mut buffer = vec!(0 as u8; 4000);
-        let bytes_read = file.read_at(&mut buffer, i * 4000)?;
+        let bytes_read = file.read(&mut buffer)?;
 
         stream.write(&buffer[0..bytes_read])?;
     }
@@ -93,7 +93,7 @@ pub fn handle_client (mut stream: TcpStream, path: &String) {
     let sections_needed = (content_len as f64 / 4000.0).ceil();
     let sections_needed = sections_needed as u64;
     let fullpath = format!("{}/{}", &path, &filename);
-    let file = match File::create(&fullpath) {
+    let mut file = match File::create(&fullpath) {
         Ok(file) => file,
         Err(e) => {
             eprintln!("Error creating file {}: {}", fullpath, e);
@@ -102,12 +102,12 @@ pub fn handle_client (mut stream: TcpStream, path: &String) {
     };
     let mut total_written = 0;
     let now = Instant::now();
-    for i in 0..sections_needed {
+    for _i in 0..sections_needed {
         let mut buffer = vec!(0 as u8; 4000);
         let buf_size = stream.peek(&mut buffer).unwrap();
     
         stream.read(&mut buffer[0..buf_size]).unwrap();
-        let bytes_written = file.write_at(&buffer[0..buf_size], i * 4000 ).unwrap();
+        let bytes_written = file.write(&buffer[0..buf_size]).unwrap();
         total_written += bytes_written;
     }
     println!("{} / {} bytes written to {} in {} ms.", total_written, content_len, fullpath, now.elapsed().as_millis())
