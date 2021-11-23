@@ -10,4 +10,4 @@ An output directory can be specified with the optional tag "-o":
 
 When a server is currently listening on the local network, a file can be sent to this server with the following:
 
-    fs send [ADDRESS] (FILEPATH)
+    fs send ADDRESS FILEPATH

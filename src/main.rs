@@ -56,8 +56,8 @@ impl Config {
         let command = match args.get(1) {
             Some(arg) => arg.clone(), 
             None => {
-                eprintln!("Error: no command specified. Use fs send [ADDRESS] (FILEPATH) or fs rec");
-                process::exit(1);
+                println!("{}", PROGRAM_DESC);
+                process::exit(0);
             }
         };
 
@@ -129,7 +129,6 @@ impl Config {
                 eprintln!("Error: unrecognized command. Use fs send [ADDRESS] (FILEPATH) or fs rec");
                 process::exit(1);
             }
-
         }
     }
 }

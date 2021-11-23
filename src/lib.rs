@@ -1,7 +1,6 @@
 use std::net::{TcpStream, SocketAddrV4};
 use std::io::{prelude::*, IoSlice};
 use std::fs::File;
-//use std::os::unix::prelude::FileExt;
 use std::process;
 use std::time::Instant;
 
